@@ -1,8 +1,3 @@
-// App.tsx — ConsumptieTracker (Expo + React Native)
-// Works on Windows dev machine with Expo Go (iOS/Android). Build iOS via EAS cloud when ready.
-// Features: add items (bier/fris/snoep), adjustable base price (fris/snoep), bier = 2x, lock price at purchase,
-// list + filter unpaid, create payment batches, totals, CSV share. Local storage via AsyncStorage.
-
 import React, { useEffect, useMemo, useState } from 'react';
 import { SafeAreaView, View, Text, TextInput, Pressable, FlatList, Switch, Share, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,33 +5,26 @@ import * as Crypto from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 
-// ---------------- Types ----------------
+/** ===== Types ===== */
 export type ItemType = 'Bier' | 'Fris' | 'Snoep';
 export type Item = {
   uuid: string;
   type: ItemType;
-  date: string; // ISO
-  priceCents: number; // locked at purchase
+  date: string;          // ISO (vastleggen, niet tonen bij toevoegen)
+  priceCents: number;    // prijs vast op aankoopmoment
   userLabel?: string;
-  paidAt?: string; // ISO
+  paidAt?: string;       // ISO
   paymentId?: string;
 };
-export type Settings = {
-  basePriceCents: number; // Fris/Snoep; Bier = 2x
-  currencyCode: string; // e.g., 'EUR'
-};
-export type PaymentBatch = {
-  id: string;
-  createdAt: string; // ISO
-  note?: string;
-};
+export type Settings = { basePriceCents: number; currencyCode: string; };
+export type PaymentBatch = { id: string; createdAt: string; note?: string };
 
-// --------------- Storage keys ---------------
+/** ===== Storage keys ===== */
 const K_ITEMS = 'ct.items.v1';
 const K_SETTINGS = 'ct.settings.v1';
 const K_PAYMENTS = 'ct.payments.v1';
 
-// --------------- Helpers ---------------
+/** ===== Helpers ===== */
 const fmtCurrency = (cents: number, code: string) =>
   new Intl.NumberFormat(undefined, { style: 'currency', currency: code }).format(cents / 100);
 
@@ -49,7 +37,7 @@ async function loadJSON<T>(key: string, fallback: T): Promise<T> {
 }
 async function saveJSON<T>(key: string, value: T) { await AsyncStorage.setItem(key, JSON.stringify(value)); }
 
-// --------------- Root App ---------------
+/** ===== Root ===== */
 export default function App() {
   const [tab, setTab] = useState<'add'|'list'|'pay'|'settings'>('add');
   return (
@@ -58,18 +46,21 @@ export default function App() {
       <View style={{ padding: 16, paddingBottom: 8 }}>
         <Text style={{ color: 'white', fontSize: 20, fontWeight: '700' }}>ConsumptieTracker</Text>
       </View>
+
       <View style={{ flex: 1 }}>
         {tab === 'add' && <AddScreen onSaved={() => setTab('list')} />}
         {tab === 'list' && <OverviewScreen />}
         {tab === 'pay' && <PaymentsScreen />}
         {tab === 'settings' && <SettingsScreen />}
       </View>
+
       <NavBar tab={tab} setTab={setTab} />
     </SafeAreaView>
   );
 }
 
-function NavBar({ tab, setTab }: { tab: string; setTab: (t: 'add'|'list'|'pay'|'settings') => void }) {
+/** ===== Nav ===== */
+function NavBar({ tab, setTab }: { tab: 'add'|'list'|'pay'|'settings'; setTab: (t: 'add'|'list'|'pay'|'settings') => void }) {
   const tabs: { key: 'add'|'list'|'pay'|'settings'; label: string }[] = [
     { key: 'add', label: 'Toevoegen' },
     { key: 'list', label: 'Overzicht' },
@@ -87,7 +78,7 @@ function NavBar({ tab, setTab }: { tab: string; setTab: (t: 'add'|'list'|'pay'|'
   );
 }
 
-// ---------------- Global state hooks ----------------
+/** ===== Global state (simple hooks met AsyncStorage) ===== */
 function useSettings() {
   const [settings, setSettings] = useState<Settings>({ basePriceCents: 70, currencyCode: 'EUR' });
   useEffect(() => { loadJSON<Settings>(K_SETTINGS, settings).then(setSettings); }, []);
@@ -107,21 +98,23 @@ function usePayments() {
   return { payments, setPayments };
 }
 
-// ---------------- Screens ----------------
+/** ===== Screens ===== */
 function AddScreen({ onSaved }: { onSaved?: () => void }) {
   const { settings } = useSettings();
   const { items, setItems } = useItems();
   const [type, setType] = useState<ItemType>('Fris');
-  const [date, setDate] = useState<string>(nowISO());
   const [userLabel, setUserLabel] = useState<string>('');
 
-  const priceCents = useMemo(() => (type === 'Bier' ? settings.basePriceCents * 2 : settings.basePriceCents), [type, settings]);
+  const priceCents = useMemo(
+    () => (type === 'Bier' ? settings.basePriceCents * 2 : settings.basePriceCents),
+    [type, settings]
+  );
 
   const add = async () => {
     const uuid = await Crypto.randomUUID();
-    const item: Item = { uuid, type, date, priceCents, userLabel };
+    const item: Item = { uuid, type, date: nowISO(), priceCents, userLabel };
     setItems([item, ...items]);
-    setDate(nowISO());
+
     try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
     Alert.alert('Opgeslagen', `${type} toegevoegd voor ${fmtCurrency(priceCents, settings.currencyCode)}`);
     onSaved?.();
@@ -132,10 +125,6 @@ function AddScreen({ onSaved }: { onSaved?: () => void }) {
       <Row>
         <Text style={label}>Type</Text>
         <Segmented value={type} onChange={(v) => setType(v as ItemType)} options={['Fris','Snoep','Bier']} />
-      </Row>
-      <Row>
-        <Text style={label}>Datum</Text>
-        <Text style={value}>{new Date(date).toLocaleString()}</Text>
       </Row>
       <Row>
         <Text style={label}>Naam (optioneel)</Text>
@@ -157,10 +146,16 @@ function OverviewScreen() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState<string>('');
 
-  const filtered = useMemo(() => items.filter(it => (
+  // Sorteer nieuwst eerst (op opgeslagen datum)
+  const sorted = useMemo(
+    () => [...items].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [items]
+  );
+
+  const filtered = useMemo(() => sorted.filter(it => (
     (!onlyUnpaid || !it.paidAt) &&
-    (search === '' || (it.userLabel||'').toLowerCase().includes(search.toLowerCase()) || it.type.toLowerCase().includes(search.toLowerCase()))
-  )), [items, onlyUnpaid, search]);
+    (search === '' || (it.userLabel || '').toLowerCase().includes(search.toLowerCase()) || it.type.toLowerCase().includes(search.toLowerCase()))
+  )), [sorted, onlyUnpaid, search]);
 
   const toggleSelect = (id: string) => setSelected(s => ({ ...s, [id]: !s[id] }));
   const selectedItems = filtered.filter(it => selected[it.uuid]);
@@ -174,6 +169,7 @@ function OverviewScreen() {
       </View>
       <TextInput value={search} onChangeText={setSearch} placeholder="Zoeken op naam of type" placeholderTextColor="#666" style={[input, { marginBottom: 8 }]} />
       <Text style={{ color: '#aaa', marginBottom: 6 }}>Totaal: {fmtCurrency(filtered.reduce((a,b)=>a+b.priceCents,0), settings.currencyCode)}</Text>
+
       <FlatList
         data={filtered}
         keyExtractor={(it) => it.uuid}
@@ -181,10 +177,7 @@ function OverviewScreen() {
           const isSel = !!selected[item.uuid];
           return (
             <Pressable onPress={() => toggleSelect(item.uuid)} style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#111', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              {/* Vinkje links */}
               <CheckBox checked={isSel} />
-
-              {/* Inhoud */}
               <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View>
                   <Text style={{ color: 'white', fontWeight: '700' }}>{item.type} — {fmtCurrency(item.priceCents, settings.currencyCode)}</Text>
@@ -196,6 +189,7 @@ function OverviewScreen() {
           );
         }}
       />
+
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 }}>
         <Text style={{ color: '#aaa' }}>Geselecteerd: {selectedItems.length} • {fmtCurrency(totalCents, settings.currencyCode)}</Text>
         <PrimaryButton title="Afrekenen" onPress={() => createPayment(selectedItems, { items, setItems })} disabled={selectedItems.length === 0} />
@@ -209,8 +203,12 @@ async function createPayment(sel: Item[], ctx: { items: Item[]; setItems: (arr: 
   const batch: PaymentBatch = { id, createdAt: nowISO() };
   const payments = await loadJSON<PaymentBatch[]>(K_PAYMENTS, []);
   await saveJSON(K_PAYMENTS, [batch, ...payments]);
-  const updated = ctx.items.map(it => sel.find(s => s.uuid === it.uuid) ? { ...it, paidAt: nowISO(), paymentId: id } : it);
+
+  const updated = ctx.items.map(it => sel.find(s => s.uuid === it.uuid)
+    ? { ...it, paidAt: nowISO(), paymentId: id }
+    : it);
   ctx.setItems(updated);
+
   try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
   Alert.alert('Afrekenen', 'Geselecteerde items gemarkeerd als betaald.');
 }
@@ -296,7 +294,7 @@ function SettingsScreen() {
   );
 }
 
-// ---------------- UI primitives ----------------
+/** ===== UI bits ===== */
 const Row: React.FC<React.PropsWithChildren> = ({ children }) => (
   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>{children}</View>
 );
@@ -325,7 +323,6 @@ function DangerButton({ title, onPress }: { title: string; onPress: () => void; 
     </Pressable>
   );
 }
-
 function Segmented({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
   return (
     <View style={{ flexDirection: 'row', backgroundColor: '#111', borderRadius: 10, borderWidth: 1, borderColor: '#222' }}>
@@ -337,7 +334,6 @@ function Segmented({ value, onChange, options }: { value: string; onChange: (v: 
     </View>
   );
 }
-
 function CheckBox({ checked }: { checked: boolean }) {
   return (
     <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: checked ? '#60a5fa' : '#333', alignItems: 'center', justifyContent: 'center', backgroundColor: checked ? '#1d4ed8' : 'transparent' }}>
