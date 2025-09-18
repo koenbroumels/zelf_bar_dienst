@@ -177,15 +177,24 @@ function OverviewScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(it) => it.uuid}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => toggleSelect(item.uuid)} style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#111', flexDirection: 'row', justifyContent: 'space-between' }}>
-            <View>
-              <Text style={{ color: 'white', fontWeight: '700' }}>{item.type} — {fmtCurrency(item.priceCents, settings.currencyCode)}</Text>
-              <Text style={{ color: '#aaa', fontSize: 12 }}>{new Date(item.date).toLocaleString()} {item.userLabel ? `• ${item.userLabel}` : ''}</Text>
-            </View>
-            <Text style={{ color: item.paidAt ? '#4ade80' : '#f59e0b' }}>{item.paidAt ? 'Betaald' : 'Open'}</Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const isSel = !!selected[item.uuid];
+          return (
+            <Pressable onPress={() => toggleSelect(item.uuid)} style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#111', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              {/* Vinkje links */}
+              <CheckBox checked={isSel} />
+
+              {/* Inhoud */}
+              <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View>
+                  <Text style={{ color: 'white', fontWeight: '700' }}>{item.type} — {fmtCurrency(item.priceCents, settings.currencyCode)}</Text>
+                  <Text style={{ color: '#aaa', fontSize: 12 }}>{new Date(item.date).toLocaleString()} {item.userLabel ? `• ${item.userLabel}` : ''}</Text>
+                </View>
+                <Text style={{ color: item.paidAt ? '#4ade80' : '#f59e0b' }}>{item.paidAt ? 'Betaald' : 'Open'}</Text>
+              </View>
+            </Pressable>
+          );
+        }}
       />
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 }}>
         <Text style={{ color: '#aaa' }}>Geselecteerd: {selectedItems.length} • {fmtCurrency(totalCents, settings.currencyCode)}</Text>
@@ -202,6 +211,7 @@ async function createPayment(sel: Item[], ctx: { items: Item[]; setItems: (arr: 
   await saveJSON(K_PAYMENTS, [batch, ...payments]);
   const updated = ctx.items.map(it => sel.find(s => s.uuid === it.uuid) ? { ...it, paidAt: nowISO(), paymentId: id } : it);
   ctx.setItems(updated);
+  try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
   Alert.alert('Afrekenen', 'Geselecteerde items gemarkeerd als betaald.');
 }
 
@@ -213,7 +223,7 @@ function PaymentsScreen() {
   const totalFor = (p: PaymentBatch) => items.filter(it => it.paymentId === p.id).reduce((a,b)=>a+b.priceCents,0);
 
   const shareCSV = async (p: PaymentBatch) => {
-    const rows = ['type,prijs_cents,datum,user,betaald_op,batch_id'];
+    const rows: string[] = ['type,prijs_cents,datum,user,betaald_op,batch_id'];
     items.filter(it => it.paymentId === p.id).forEach(it => rows.push([
       it.type,
       String(it.priceCents),
@@ -227,7 +237,7 @@ function PaymentsScreen() {
 
   const remove = async (p: PaymentBatch) => {
     const its = items.map(it => it.paymentId === p.id ? ({ ...it, paymentId: undefined, paidAt: undefined }) : it);
-    await saveJSON(K_ITEMS, its);
+    await saveJSON<Item[]>(K_ITEMS, its);
     setPayments(payments.filter(x => x.id !== p.id));
   };
 
@@ -264,6 +274,7 @@ function SettingsScreen() {
     const cents = Math.round(parseFloat(base.replace(',','.')) * 100);
     if (isNaN(cents) || cents <= 0) return Alert.alert('Fout', 'Voer een geldige prijs in.');
     setSettings({ basePriceCents: cents, currencyCode: code || 'EUR' });
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
   };
 
   return (
@@ -323,6 +334,14 @@ function Segmented({ value, onChange, options }: { value: string; onChange: (v: 
           <Text style={{ color: 'white' }}>{opt}</Text>
         </Pressable>
       ))}
+    </View>
+  );
+}
+
+function CheckBox({ checked }: { checked: boolean }) {
+  return (
+    <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: checked ? '#60a5fa' : '#333', alignItems: 'center', justifyContent: 'center', backgroundColor: checked ? '#1d4ed8' : 'transparent' }}>
+      {checked ? <Text style={{ color: 'white', fontWeight: '900', lineHeight: 20 }}>✓</Text> : null}
     </View>
   );
 }
