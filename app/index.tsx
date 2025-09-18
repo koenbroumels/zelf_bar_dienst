@@ -277,14 +277,27 @@ function SettingsScreen() {
 
   return (
     <View style={{ padding: 16, gap: 12 }}>
-      <Row>
-        <Text style={label}>Fris/Snoep</Text>
-        <TextInput value={base} onChangeText={setBase} style={[input, { width: 100, textAlign: 'right' }]} />
-      </Row>
-      <Row>
-        <Text style={label}>Bier (auto)</Text>
-        <Text style={value}>{(parseFloat(base.replace(',','.'))*2 || 0).toFixed(2)}</Text>
-      </Row>
+		<Row>
+		<Text style={label}>Fris/Snoep</Text>
+		<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+		<TextInput value={base} onChangeText={setBase} style={[input, { width: 100, textAlign: 'right' }]} />
+		<Text style={value}>
+		{fmtCurrency(
+		Math.round((parseFloat(base.replace(',','.')) || 0) * 100),
+		settings.currencyCode
+		)}
+		</Text>
+		</View>
+		</Row>
+	  <Row>
+		<Text style={label}>Bier (auto)</Text>
+		<Text style={value}>
+			{fmtCurrency(
+			  Math.round(((parseFloat(base.replace(',','.')) || 0) * 2) * 100),
+			  settings.currencyCode
+			)}
+		</Text>
+	  </Row>
       <Row>
         <Text style={label}>Valuta</Text>
         <TextInput value={code} onChangeText={setCode} autoCapitalize='characters' style={[input, { width: 100, textAlign: 'right' }]} />
