@@ -1,0 +1,15 @@
+# Node/Expo
+node_modules/
+.expo/
+.expo-shared/
+dist/
+build/
+web-build/
+*.log
+*.tmp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.expo-packager-cache/
+.expo-dev-cache/
+.DS_Store
