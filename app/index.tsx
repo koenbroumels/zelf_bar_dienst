@@ -23,10 +23,11 @@ export type PaymentBatch = { id: string; createdAt: string; note?: string };
 const K_ITEMS = 'ct.items.v1';
 const K_SETTINGS = 'ct.settings.v1';
 const K_PAYMENTS = 'ct.payments.v1';
+const K_LAST_TYPE = 'ct.lastType.v1';
 
 /** ===== Helpers ===== */
 const fmtCurrency = (cents: number, code: string) =>
-  new Intl.NumberFormat(undefined, { style: 'currency', currency: code }).format(cents / 100);
+  new Intl.NumberFormat('nl-NL', { style: 'currency', currency: code }).format(cents / 100);
 
 const nowISO = () => new Date().toISOString();
 
@@ -102,7 +103,24 @@ function usePayments() {
 function AddScreen({ onSaved }: { onSaved?: () => void }) {
   const { settings } = useSettings();
   const { items, setItems } = useItems();
+
+  // Laatst gekozen type onthouden
   const [type, setType] = useState<ItemType>('Fris');
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(K_LAST_TYPE);
+        if (raw) {
+          const val = JSON.parse(raw) as ItemType;
+          if (val === 'Fris' || val === 'Snoep' || val === 'Bier') setType(val);
+        }
+      } catch {}
+    })();
+  }, []);
+  useEffect(() => {
+    AsyncStorage.setItem(K_LAST_TYPE, JSON.stringify(type)).catch(() => {});
+  }, [type]);
+
   const [userLabel, setUserLabel] = useState<string>('');
 
   const priceCents = useMemo(
@@ -277,27 +295,27 @@ function SettingsScreen() {
 
   return (
     <View style={{ padding: 16, gap: 12 }}>
-		<Row>
-		<Text style={label}>Fris/Snoep</Text>
-		<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-		<TextInput value={base} onChangeText={setBase} style={[input, { width: 100, textAlign: 'right' }]} />
-		<Text style={value}>
-		{fmtCurrency(
-		Math.round((parseFloat(base.replace(',','.')) || 0) * 100),
-		settings.currencyCode
-		)}
-		</Text>
-		</View>
-		</Row>
-	  <Row>
-		<Text style={label}>Bier (auto)</Text>
-		<Text style={value}>
-			{fmtCurrency(
-			  Math.round(((parseFloat(base.replace(',','.')) || 0) * 2) * 100),
-			  settings.currencyCode
-			)}
-		</Text>
-	  </Row>
+      <Row>
+        <Text style={label}>Fris/Snoep</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TextInput value={base} onChangeText={setBase} style={[input, { width: 100, textAlign: 'right' }]} />
+          <Text style={value}>
+            {fmtCurrency(
+              Math.round((parseFloat(base.replace(',','.')) || 0) * 100),
+              settings.currencyCode
+            )}
+          </Text>
+        </View>
+      </Row>
+      <Row>
+        <Text style={label}>Bier (auto)</Text>
+        <Text style={value}>
+          {fmtCurrency(
+            Math.round(((parseFloat(base.replace(',','.')) || 0) * 2) * 100),
+            settings.currencyCode
+          )}
+        </Text>
+      </Row>
       <Row>
         <Text style={label}>Valuta</Text>
         <TextInput value={code} onChangeText={setCode} autoCapitalize='characters' style={[input, { width: 100, textAlign: 'right' }]} />
@@ -325,7 +343,7 @@ function PrimaryButton({ title, onPress, disabled }: { title: string; onPress: (
 function SecondaryButton({ title, onPress }: { title: string; onPress: () => void; }) {
   return (
     <Pressable onPress={onPress} style={{ backgroundColor: '#0f172a', padding: 10, borderRadius: 10 }}>
-      <Text style={{ color: 'white' }}>{title}</Text>
+      <Text style={{ color: 'white', textAlign: 'center' }}>{title}</Text>
     </Pressable>
   );
 }
